@@ -2041,6 +2041,39 @@ public class HttpParserTest
         assertEquals(8888, _port);
     }
 
+    @Test
+    public void testAuthorityPlusHost()
+    {
+        ByteBuffer buffer = BufferUtil.toBuffer(
+            "POST https://secure.example.org:8443/content/ HTTP/1.1\n" +
+                "Host: secure.example.org:8443\n" +
+                "Connection: close\n" +
+                "\n");
+
+        HttpParser.RequestHandler handler = new Handler();
+        HttpParser parser = new HttpParser(handler);
+        parser.parseNext(buffer);
+        assertNull(_bad);
+        assertEquals("secure.example.org", _host);
+        assertEquals(8443, _port);
+    }
+
+    @Test
+    public void testBadRepeatedHostHeader()
+    {
+        ByteBuffer buffer = BufferUtil.toBuffer(
+            "POST https://secure.example.org:8443/content/ HTTP/1.1\n" +
+                "Host: secure.example.org:8443\n" +
+                "Host: secure.example.org:8443\n" +
+                "Connection: close\n" +
+                "\n");
+
+        HttpParser.RequestHandler handler = new Handler();
+        HttpParser parser = new HttpParser(handler);
+        parser.parseNext(buffer);
+        assertThat(_bad, startsWith("Bad"));
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {
         "Host: whatever.com:xxxx",
