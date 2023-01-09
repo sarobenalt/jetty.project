@@ -134,8 +134,8 @@ public class ServletOutputStreamWriteTest
                 (Consumer<HttpConfiguration>)httpConfig ->
                 {
                     // From xml configuration
-                    httpConfig.setOutputBufferSize(32 * 1024);
-                    httpConfig.setOutputAggregationSize(8192);
+                    httpConfig.setOutputBufferSize(32 * 1024); // results in HttpOutput size of "_aggregate" ByteBuffer
+                    httpConfig.setOutputAggregationSize(8192); // results in HttpOutput.commitSize setting
                 },
                 (HttpServletScenario)(req, resp) ->
                 {
