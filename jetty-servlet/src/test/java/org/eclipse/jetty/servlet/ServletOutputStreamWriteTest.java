@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.function.Consumer;
 import java.util.stream.Stream;
 import javax.servlet.ServletException;
 import javax.servlet.ServletOutputStream;
@@ -13,6 +14,8 @@ import javax.servlet.http.HttpServletResponse;
 
 import org.eclipse.jetty.http.HttpStatus;
 import org.eclipse.jetty.http.HttpTester;
+import org.eclipse.jetty.server.HttpConfiguration;
+import org.eclipse.jetty.server.HttpConnectionFactory;
 import org.eclipse.jetty.server.LocalConnector;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.server.handler.ContextHandlerCollection;
@@ -90,11 +93,15 @@ public class ServletOutputStreamWriteTest
     {
         final boolean NOT_COMMITTED = false;
         final boolean COMMITTED = true;
+
+        final Consumer<HttpConfiguration> DEFAULT_HTTPCONFIG = httpConfig ->
+        {};
+
         return Stream.of(
             Arguments.of("Small println, fits in bufferSize",
+                DEFAULT_HTTPCONFIG,
                 (HttpServletScenario)(req, resp) ->
                 {
-                    // bigger than output
                     resp.setBufferSize(10);
                     resp.setCharacterEncoding("utf-8");
                     resp.setContentType("text/plain");
@@ -104,9 +111,9 @@ public class ServletOutputStreamWriteTest
                 NOT_COMMITTED)
             ,
             Arguments.of("Two writes, fits in bufferSize",
+                DEFAULT_HTTPCONFIG,
                 (HttpServletScenario)(req, resp) ->
                 {
-                    // bigger than output
                     resp.setBufferSize(1024);
                     resp.setCharacterEncoding("utf-8");
                     resp.setContentType("text/plain");
@@ -122,6 +129,12 @@ public class ServletOutputStreamWriteTest
                 },
                 NOT_COMMITTED),
             Arguments.of("One write of half bufferSize, original report",
+                (Consumer<HttpConfiguration>)httpConfig ->
+                {
+                    // From xml configuration
+                    httpConfig.setOutputBufferSize(32 * 1024);
+                    httpConfig.setOutputAggregationSize(8192);
+                },
                 (HttpServletScenario)(req, resp) ->
                 {
                     resp.setBufferSize(32768);
@@ -135,6 +148,7 @@ public class ServletOutputStreamWriteTest
                 },
                 NOT_COMMITTED),
             Arguments.of("Three writes of half bufferSize",
+                DEFAULT_HTTPCONFIG,
                 (HttpServletScenario)(req, resp) ->
                 {
                     resp.setBufferSize(32768);
@@ -155,7 +169,7 @@ public class ServletOutputStreamWriteTest
 
     @ParameterizedTest(name = "[{index}] {0}")
     @MethodSource("writeScenarios")
-    public void testWriteAggregate(@SuppressWarnings("unused") String description, HttpServletScenario httpServletScenario, boolean expectedCommitted) throws Exception
+    public void testWriteAggregate(@SuppressWarnings("unused") String description, Consumer<HttpConfiguration> configConsumer, HttpServletScenario httpServletScenario, boolean expectedCommitted) throws Exception
     {
         ServletContextHandler contextHandler = new ServletContextHandler();
         contextHandler.setContextPath("/");
@@ -174,6 +188,8 @@ public class ServletOutputStreamWriteTest
         contextHandler.addServlet(holder, "/test/*");
 
         startServer(contextHandler);
+        HttpConfiguration httpConfig = localConnector.getBean(HttpConnectionFactory.class).getHttpConfiguration();
+        configConsumer.accept(httpConfig);
 
         String rawRequest = "GET /test/ HTTP/1.1\r\n" +
             "Host: local\r\n" +
