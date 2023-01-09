@@ -787,6 +787,15 @@ public class HttpOutput extends ServletOutputStream implements Runnable
             aggregate = len <= _commitSize && (!last || BufferUtil.hasContent(_aggregate) && len <= space);
             flush = last || !aggregate || len >= space;
 
+            LOG.info("write(array {}) last={}, space={}, commitSize={}, hasContent(aggregate)={}, aggregate={}, flush={}",
+                BufferUtil.toDetailString(ByteBuffer.wrap(b, off, len)),
+                last,
+                space,
+                _commitSize,
+                BufferUtil.hasContent(_aggregate),
+                aggregate,
+                flush);
+
             if (last && _state == State.OPEN)
                 _state = State.CLOSING;
 
