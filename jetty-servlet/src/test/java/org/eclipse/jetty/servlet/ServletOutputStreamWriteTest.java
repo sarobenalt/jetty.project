@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
 import javax.servlet.ServletException;
@@ -95,7 +96,8 @@ public class ServletOutputStreamWriteTest
         final boolean COMMITTED = true;
 
         final Consumer<HttpConfiguration> DEFAULT_HTTPCONFIG = httpConfig ->
-        {};
+        {
+        };
 
         return Stream.of(
             Arguments.of("Small println, fits in bufferSize",
@@ -137,7 +139,7 @@ public class ServletOutputStreamWriteTest
                 },
                 (HttpServletScenario)(req, resp) ->
                 {
-                    resp.setBufferSize(32768);
+                    // rely on HttpConfiguration for buffer/commit sizes
                     ServletOutputStream outputStream = resp.getOutputStream();
                     int dataSize = resp.getBufferSize() / 2;
                     byte arr[] = new byte[dataSize];
@@ -146,7 +148,7 @@ public class ServletOutputStreamWriteTest
                     outputStream.print(data);
                     // no flush
                 },
-                NOT_COMMITTED),
+                COMMITTED),
             Arguments.of("Three writes of half bufferSize",
                 DEFAULT_HTTPCONFIG,
                 (HttpServletScenario)(req, resp) ->
@@ -173,6 +175,7 @@ public class ServletOutputStreamWriteTest
     {
         ServletContextHandler contextHandler = new ServletContextHandler();
         contextHandler.setContextPath("/");
+        final Boolean[] isCommitted = {null};
         ServletHolder holder = new ServletHolder(new HttpServlet()
         {
             Logger LOG = LoggerFactory.getLogger(ServletOutputStreamWriteTest.class);
@@ -182,7 +185,8 @@ public class ServletOutputStreamWriteTest
             {
                 httpServletScenario.accept(req, resp);
                 LOG.info("resp.isCommitted={}", resp.isCommitted());
-                assertThat("isCommitted", resp.isCommitted(), is(expectedCommitted));
+                isCommitted[0] = resp.isCommitted();
+
             }
         });
         contextHandler.addServlet(holder, "/test/*");
@@ -198,5 +202,7 @@ public class ServletOutputStreamWriteTest
 
         HttpTester.Response response = HttpTester.parseResponse(localConnector.getResponse(rawRequest));
         assertThat("response.status", response.getStatus(), is(HttpStatus.OK_200));
+
+        assertThat("wasCommittedInDispatch", isCommitted[0], is(expectedCommitted));
     }
 }
